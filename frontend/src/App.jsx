@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
+import Explainer from "./Explainer.jsx";
+import Notch from "./Notch.jsx";
 
 const API = "http://127.0.0.1:8000";
 const PALETTE = ["#3b82f6", "#f97316", "#10b981", "#a855f7", "#ef4444", "#eab308"];
@@ -119,53 +121,6 @@ function downloadChart(container, groups) {
   img.src = url;
 }
 
-function GroupForm({ group, error, canRemove, onChange, onRemove }) {
-  const setAge = (key, text) => {
-    const n = parseInt(text, 10);
-    onChange({ [key]: Number.isNaN(n) ? 0 : Math.min(85, Math.max(0, n)) });
-  };
-  return (
-    <div style={{ border: `2px solid ${group.color}`, borderRadius: 8, padding: 12, textAlign: "left" }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-        <input type="color" value={group.color} title="Choose line color"
-          onChange={(e) => onChange({ color: e.target.value })}
-          style={{ width: 36, height: 28, padding: 0, border: "none", background: "none", cursor: "pointer" }} />
-        <input type="text" value={group.name} maxLength={30}
-          onChange={(e) => onChange({ name: e.target.value })}
-          style={{ flex: 1, minWidth: 0, fontWeight: "bold" }} />
-        {canRemove && (
-          <button onClick={onRemove} title="Remove this group" style={{ cursor: "pointer" }}>✕</button>
-        )}
-      </div>
-      <label>Stage{" "}
-        <select value={group.stage} onChange={(e) => onChange({ stage: e.target.value })}>
-          <option value="">All stages</option>
-          <option>Localized</option>
-          <option>Regional</option>
-          <option>Distant</option>
-        </select>
-      </label>
-      <br />
-      <label>Sex{" "}
-        <select value={group.sex} onChange={(e) => onChange({ sex: e.target.value })}>
-          <option value="">All</option>
-          <option>Female</option>
-          <option>Male</option>
-        </select>
-      </label>
-      <br />
-      <label>Age{" "}
-        <input type="number" min="0" max="85" style={{ width: 60 }}
-          value={group.age_min} onChange={(e) => setAge("age_min", e.target.value)} />
-        {" to "}
-        <input type="number" min="0" max="85" style={{ width: 60 }}
-          value={group.age_max} onChange={(e) => setAge("age_max", e.target.value)} />
-      </label>
-      {error && <p style={{ color: "#ef4444", margin: "8px 0 0", fontSize: "0.85em" }}>{error}</p>}
-    </div>
-  );
-}
-
 export default function App() {
   const nextId = useRef(3);
   const chartRef = useRef(null);
@@ -174,6 +129,17 @@ export default function App() {
     { id: "g2", name: "Group 2", color: PALETTE[1], stage: "Regional", sex: "", age_min: 70, age_max: 85 },
   ]);
   const [results, setResults] = useState({}); // id -> { data } or { error }
+  const [activeId, setActiveId] = useState("g1");
+  const [notchVisible, setNotchVisible] = useState(false);
+  const dashboardRef = useRef(null);
+  const active = groups.find((g) => g.id === activeId) || groups[0];
+
+  // Only show the floating controls while the dashboard is on screen
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => setNotchVisible(e.isIntersecting), { threshold: 0.05 });
+    obs.observe(dashboardRef.current);
+    return () => obs.disconnect();
+  }, []);
 
   const updateGroup = (id, changes) =>
     setGroups((gs) => gs.map((g) => (g.id === id ? { ...g, ...changes } : g)));
@@ -186,6 +152,7 @@ export default function App() {
       ...gs,
       { id: `g${n}`, name: `Group ${n}`, color: unusedColor, stage: "", sex: "", age_min: 0, age_max: 85 },
     ]);
+  setActiveId(`g${n}`);
   };
 
   const removeGroup = (id) => setGroups((gs) => gs.filter((g) => g.id !== id));
@@ -215,25 +182,18 @@ export default function App() {
   const ticks = [0, 12, 24, 36, 48, 60, 84, 120, 180, 240];
 
   return (
-    <div style={{ maxWidth: 1000, margin: "1.5rem auto", fontFamily: "sans-serif", padding: "0 1rem" }}>
-      <h1 style={{ marginBottom: 4 }}>OncoSurvive</h1>
-      <p style={{ marginTop: 0 }}>
+    <>
+    <div id="dashboard" ref={dashboardRef} style={{ maxWidth: 1000, width: "100%", boxSizing: "border-box", margin: "1.5rem auto 0", paddingBottom: 140, fontFamily: "sans-serif", paddingInline: "1rem" }}>
+      <h1 style={{ marginBottom: 20 }}>OncoSurvive</h1>
+      <p style={{ marginTop: 0, marginBottom: 20 }}>
         Cancer-specific survival after a colorectal cancer diagnosis (SEER, 2004-2020).
         For education only, not medical advice.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-        {groups.map((g) => (
-          <GroupForm key={g.id} group={g} error={results[g.id]?.error}
-            canRemove={groups.length > 1}
-            onChange={(changes) => updateGroup(g.id, changes)}
-            onRemove={() => removeGroup(g.id)} />
-        ))}
-      </div>
-      <button onClick={addGroup} disabled={groups.length >= MAX_GROUPS}
-        style={{ margin: "12px 0", padding: "6px 14px", cursor: "pointer" }}>
-        + Add group {groups.length >= MAX_GROUPS ? `(max ${MAX_GROUPS})` : ""}
-      </button>
+      <p className="dashboard-hint">
+        Use the bar at the bottom of the screen to pick a group and change its stage, sex, or age.
+        The graph updates as you go.
+      </p>
 
       {withData.length > 0 && (
         <>
@@ -242,7 +202,7 @@ export default function App() {
               <LineChart data={chartData} margin={{ top: 20, right: 20, bottom: 30, left: 10 }}>
                 <CartesianGrid stroke="#888" strokeOpacity={0.25} />
                 <XAxis dataKey="month" type="number" domain={[0, 240]} ticks={ticks}
-                  label={{ value: "Months since diagnosis", position: "insideBottom", offset: -15 }} />
+                  label={{ value: "Months since diagnosis", position: "insideBottom", offset: -15, marginTop: 20 }} />
                 <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
                 <Tooltip formatter={(v) => pct(v)} labelFormatter={(m) => `Month ${m}`} />
                 <Legend verticalAlign="top" />
@@ -254,7 +214,7 @@ export default function App() {
             </ResponsiveContainer>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", marginTop: 20 }}>
             <thead>
               <tr><th></th><th>Patients</th><th>1-year</th><th>3-year</th><th>5-year</th></tr>
             </thead>
@@ -273,18 +233,39 @@ export default function App() {
               })}
             </tbody>
           </table>
-          <p style={{ fontSize: "0.85em", opacity: 0.8 }}>
+          <p style={{ fontSize: "0.85em", opacity: 0.8, marginBottom: 24, marginTop: 10 }}>
             Differences between groups are descriptive. They don't account for other health conditions,
             treatment choices, or other factors that differ between groups.
+            
           </p>
           <button
+            className="download-btn"
             onClick={() => downloadChart(chartRef.current, withData)}
-            style={{ margin: "8px 0 24px", padding: "8px 16px", cursor: "pointer" }}
           >
-            ⬇ Download chart (PNG)
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v12" />
+              <path d="M7 11l5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+            Download chart
           </button>
         </>
       )}
+      <Explainer />
     </div>
+    <Notch
+      groups={groups}
+      active={active}
+      errors={Object.fromEntries(groups.map((g) => [g.id, results[g.id]?.error]).filter(([, e]) => e))}
+      palette={PALETTE}
+      visible={notchVisible}
+      canAdd={groups.length < MAX_GROUPS}
+      onSelectGroup={setActiveId}
+      onChange={updateGroup}
+      onAdd={addGroup}
+      onRemove={removeGroup}
+    />
+    </>
   );
 }
