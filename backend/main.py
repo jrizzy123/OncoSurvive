@@ -18,6 +18,13 @@ from pydantic import BaseModel, Field
 DATA_PATH = Path(os.environ.get("DATA_PATH", Path(__file__).resolve().parent / "data" / "km_counts.csv.gz"))
 DATA_URL = os.environ.get("DATA_URL")
 
+# Accept either file name next to DATA_PATH; load_counts detects the format from the contents
+if not DATA_PATH.exists():
+    for name in ("km_counts.b64", "km_counts.csv.gz"):
+        if (DATA_PATH.parent / name).exists():
+            DATA_PATH = DATA_PATH.parent / name
+            break
+
 if not DATA_PATH.exists():
     if not DATA_URL:
         folder = DATA_PATH.parent
