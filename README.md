@@ -180,7 +180,7 @@ The API goes on [Render](https://render.com) and the frontend on [Vercel](https:
 
 **API (Render)**
 1. In Render, choose **New > Blueprint** and select this repository. It reads `render.yaml`.
-2. In the service's **Environment** settings, add a **Secret File** named `km_counts.csv.gz` with the file from `backend/data/`. It is mounted at `/etc/secrets/km_counts.csv.gz`, which is where `DATA_PATH` points.
+2. In the service's **Environment** settings, add a **Secret File** named `km_counts.b64` and paste in the contents of `backend/data/km_counts.b64` (a text copy of the count table that `build_counts.py` writes; on Windows, `Get-Content backend\data\km_counts.b64 -Raw | Set-Clipboard` copies it). It is mounted at `/etc/secrets/km_counts.b64`, which is where `DATA_PATH` points.
 3. After the frontend is deployed, set `ALLOWED_ORIGINS` to its URL (for example `https://oncosurvive.vercel.app`).
 
 Alternatively, set `DATA_URL` to a private download link and the API fetches the file at startup.

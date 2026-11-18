@@ -9,6 +9,7 @@ the deployed API needs.
 Run from the repo root after the cleaning notebook:
     python backend/build_counts.py
 """
+import base64
 from pathlib import Path
 
 import pandas as pd
@@ -32,3 +33,8 @@ counts = (
 OUT.parent.mkdir(exist_ok=True)
 counts.to_csv(OUT, index=False)
 print(f"{len(df):,} patients -> {len(counts):,} count rows, written to {OUT}")
+
+# Same file as base64 text, for hosts whose secret-file upload only accepts pasted text
+B64 = OUT.with_name("km_counts.b64")
+B64.write_bytes(base64.encodebytes(OUT.read_bytes()))
+print(f"Base64 copy for pasting: {B64} ({B64.stat().st_size / 1024:.0f} KB)")

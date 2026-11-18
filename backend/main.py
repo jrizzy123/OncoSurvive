@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 import urllib.request
 from pathlib import Path
@@ -24,7 +26,21 @@ if not DATA_PATH.exists():
     DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(DATA_URL, DATA_PATH)
 
-df = pd.read_csv(DATA_PATH)
+
+def load_counts(path: Path) -> pd.DataFrame:
+    """Read the count table, either as .csv.gz or as base64 text of that file.
+
+    The base64 form exists for hosts whose secret-file upload only takes pasted
+    text (such as Render). gzip files start with bytes 1f 8b; anything else is
+    treated as base64.
+    """
+    raw = path.read_bytes()
+    if not raw.startswith(b"\x1f\x8b"):
+        raw = base64.b64decode(raw)
+    return pd.read_csv(io.BytesIO(raw), compression="gzip")
+
+
+df = load_counts(DATA_PATH)
 
 app = FastAPI(title="OncoSurvive API")
 
