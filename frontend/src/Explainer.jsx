@@ -45,6 +45,15 @@ export default function Explainer() {
         or treatment choices, so a gap does not show that one factor <em>caused</em> the difference.
       </p>
 
+      <h4 style={h}>The log-rank test</h4>
+      <p style={p}>
+        Below the table, a log-rank test checks whether the curves differ by more than chance alone would
+        explain. A small p-value (under 0.05) means a gap this large would be unlikely if the groups truly
+        had the same survival. With very large groups, even small gaps can give tiny p-values, so look at
+        the size of the gap too. The test is skipped when groups share patients, such as "All ages" and
+        "Under 50", because it assumes each patient is in only one group.
+      </p>
+
       <h4 style={h}>Important limits</h4>
       <p style={p}>
         These curves describe groups of past patients. They cannot predict what will happen to any one

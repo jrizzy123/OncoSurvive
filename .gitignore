@@ -2,3 +2,8 @@
 data/
 .venv/
 .ipynb_checkpoints/
+*.csv.gz
+backend/data/
+__pycache__/
+frontend/.env
+frontend/.env.local

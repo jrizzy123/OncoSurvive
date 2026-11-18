@@ -5,7 +5,8 @@ import {
 import Explainer from "./Explainer.jsx";
 import Notch from "./Notch.jsx";
 
-const API = "http://127.0.0.1:8000";
+// Set VITE_API_URL when deploying (for example in Vercel's environment settings)
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const PALETTE = ["#3b82f6", "#f97316", "#10b981", "#a855f7", "#ef4444", "#eab308"];
 const MAX_GROUPS = 6;
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
@@ -20,6 +21,19 @@ function fetchGroup(g, signal) {
     if (!r.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Invalid filters");
     return body;
   });
+}
+
+// Ask the API whether the curves differ by more than chance (log-rank test)
+function fetchLogrank(groups, signal) {
+  const cohorts = groups.map((g) => ({
+    age_min: g.age_min, age_max: g.age_max, stage: g.stage || null, sex: g.sex || null,
+  }));
+  return fetch(`${API}/logrank`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cohorts }),
+    signal,
+  }).then((r) => (r.ok ? r.json() : null));
 }
 
 // Combine all curves into one table with a row per month, carrying the last value forward
@@ -121,6 +135,29 @@ function downloadChart(container, groups) {
   img.src = url;
 }
 
+function LogrankNote({ test, count }) {
+  if (test.overlapping) {
+    return (
+      <p className="stat-test">
+        <strong>Log-rank test not shown.</strong> Some groups include the same patients (for example
+        "All ages" and "Under 50"). The test only works when each patient is in one group.
+      </p>
+    );
+  }
+  const significant = test.p_value < 0.05;
+  const p = test.p_label.startsWith("<") ? `p ${test.p_label}` : `p = ${test.p_label}`;
+  return (
+    <p className="stat-test">
+      <strong>Log-rank test: {p}.</strong>{" "}
+      {significant
+        ? count > 2
+          ? "At least one curve differs from the others by more than chance alone would likely explain."
+          : "The curves differ by more than chance alone would likely explain."
+        : "The differences between the curves could be due to chance."}
+    </p>
+  );
+}
+
 export default function App() {
   const nextId = useRef(3);
   const chartRef = useRef(null);
@@ -129,6 +166,7 @@ export default function App() {
     { id: "g2", name: "Group 2", color: PALETTE[1], stage: "Regional", sex: "", age_min: 70, age_max: 85 },
   ]);
   const [results, setResults] = useState({}); // id -> { data } or { error }
+  const [test, setTest] = useState(null); // log-rank result for the groups that have data
   const [activeId, setActiveId] = useState("g1");
   const [notchVisible, setNotchVisible] = useState(false);
   const dashboardRef = useRef(null);
@@ -171,7 +209,12 @@ export default function App() {
           })
       )
     )
-      .then((entries) => setResults(Object.fromEntries(entries)))
+      .then((entries) => {
+        setResults(Object.fromEntries(entries));
+        const ok = groups.filter((g) => entries.find(([id]) => id === g.id)[1].data);
+        if (ok.length < 2) return setTest(null);
+        return fetchLogrank(ok, controller.signal).then(setTest);
+      })
       .catch(() => {});
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,6 +276,7 @@ export default function App() {
               })}
             </tbody>
           </table>
+          {withData.length >= 2 && test && <LogrankNote test={test} count={withData.length} />}
           <p style={{ fontSize: "0.85em", opacity: 0.8, marginBottom: 24, marginTop: 10 }}>
             Differences between groups are descriptive. They don't account for other health conditions,
             treatment choices, or other factors that differ between groups.

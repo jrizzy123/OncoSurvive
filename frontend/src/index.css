@@ -453,3 +453,15 @@ code {
   font-size: 0.82rem;
   color: #fca5a5;
 }
+
+.stat-test {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  font-size: 0.88em;
+  line-height: 1.5;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-left: 3px solid #3b82f6;
+  border-radius: 8px;
+}
+.stat-test strong { color: var(--text-h); }

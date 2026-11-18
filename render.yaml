@@ -1,0 +1,20 @@
+# Render Blueprint for the OncoSurvive API (https://render.com/docs/blueprint-spec)
+services:
+  - type: web
+    name: oncosurvive-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /docs
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.2"
+      # Where the API reads the count table. Upload km_counts.csv.gz as a Render Secret File
+      # and it is mounted at this path.
+      - key: DATA_PATH
+        value: /etc/secrets/km_counts.csv.gz
+      # Your Vercel URL(s), comma-separated, for example https://oncosurvive.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false

@@ -2,7 +2,7 @@
 
 An interactive tool for exploring how cancer survival differs by stage, age, sex, and race, built on real U.S. cancer registry data.
 
-> **Status:** Early development. The data pipeline and first survival analysis are complete and validated. The web dashboard is not built yet.
+> **Status:** Working dashboard for colorectal cancer. The data pipeline, survival analysis, API, and React frontend are built and validated. Next up: deployment and more cancer types.
 
 ---
 
@@ -13,6 +13,18 @@ When someone is diagnosed with cancer, one of the first questions is "what are t
 OncoSurvive lets a user pick a group of patients (for example, "colon cancer, regional stage, diagnosed under age 50") and see how many of them were still alive over the following months and years, compared side by side with another group. It also explains how to read the charts, since survival curves are widely misunderstood.
 
 **This is an educational project. It is not a clinical tool and must not be used to make medical decisions.**
+
+---
+
+## Features
+
+- **Compare up to six groups** of patients, each filtered by stage, sex, and age range, on one chart.
+- **A floating control bar** at the bottom of the screen. Pick a group, change its filters, and the curves redraw immediately.
+- **Summary table** with patient counts and 1, 3, and 5-year cancer-specific survival for each group.
+- **Log-rank test** reporting whether the curves differ by more than chance would explain. It is skipped automatically when groups share patients, since the test assumes they don't.
+- **Small-group protection:** the API refuses any group with fewer than 30 patients.
+- **"How to read a survival curve" explainer** covering steps, censoring, median survival, the log-rank test, and limits.
+- **Download the chart** as a PNG with a title, legend, and source line.
 
 ---
 
@@ -58,6 +70,7 @@ OncoSurvive lets a user pick a group of patients (for example, "colon cancer, re
 3. **Estimate survival** with the Kaplan-Meier estimator (`lifelines`).
 4. **Validate** the output against published SEER statistics before building anything on top of it.
 5. **Compare cohorts** with the log-rank test.
+6. **Aggregate for the API.** `backend/build_counts.py` collapses the patient rows into counts of patients sharing the same stage, sex, age, follow-up month, and outcome (about 89,000 rows, 266 KB compressed). Kaplan-Meier curves and log-rank tests computed from these weighted counts are identical to ones computed from the patient rows, so the API never needs patient-level data.
 
 ---
 
@@ -80,12 +93,12 @@ The estimates match published figures, which confirms the pipeline is working. B
 - [x] Obtain SEER access and export colorectal cohort
 - [x] Clean data and define survival events
 - [x] Kaplan-Meier curves by stage, validated against published values
-- [ ] Cohort comparison (for example, under 50 vs. 70+) with log-rank test
+- [x] Cohort comparison (for example, under 50 vs. 70+) with log-rank test
+- [x] Backend API (FastAPI) serving survival curves for any filter combination
+- [x] Frontend dashboard (React) with filters and side-by-side comparison
+- [x] "How to read a survival curve" explainer panel
+- [ ] Deployment (config ready: `render.yaml` for the API, Vercel for the frontend)
 - [ ] Add breast and lung cancer
-- [ ] Backend API (FastAPI) serving survival curves for any filter combination
-- [ ] Frontend dashboard (React) with filters and side-by-side comparison
-- [ ] "How to read a survival curve" explainer panel
-- [ ] Deployment
 - [ ] Stretch: treatment variables, county-level income/rurality, PubMed-linked research explorer
 
 ---
@@ -107,8 +120,8 @@ The estimates match published figures, which confirms the pipeline is working. B
 |---|---|
 | Data retrieval | SEER\*Stat |
 | Analysis | Python, pandas, lifelines, matplotlib, Jupyter |
-| Backend (planned) | FastAPI |
-| Frontend (planned) | React, Recharts |
+| Backend | FastAPI, lifelines |
+| Frontend | React, Vite, Recharts |
 | Deployment (planned) | Vercel, Render |
 
 ---
@@ -117,16 +130,23 @@ The estimates match published figures, which confirms the pipeline is working. B
 
 ```
 oncosurvive/
-  data/raw/            SEER export (not tracked in git)
-  data/processed/      cleaned data (not tracked in git)
+  data/raw/                  SEER export (not tracked in git)
+  data/processed/            cleaned patient-level data (not tracked in git)
   notebooks/
-    01_load_and_clean.ipynb
-    02_survival_analysis.ipynb   (planned)
-  .gitignore
-  README.md
+    01_load_and_clean.ipynb  cleaning and validation
+  backend/
+    build_counts.py          builds the aggregate count table from the cleaned data
+    main.py                  FastAPI app: /survival, /compare, /logrank
+    requirements.txt         API dependencies only
+    data/km_counts.csv.gz    aggregate counts (generated, not tracked in git)
+  frontend/
+    src/App.jsx              dashboard, chart, table, PNG download
+    src/Notch.jsx            floating control bar
+    src/Explainer.jsx        "How to read a survival curve"
+  render.yaml                Render deployment config for the API
 ```
 
-## Reproducing the analysis
+## Running it locally
 
 1. Request SEER Research Data access and install SEER\*Stat (Windows).
 2. Export the cohort described above to `data/raw/seer_raw.csv`.
@@ -134,9 +154,45 @@ oncosurvive/
    ```
    python -m venv .venv
    .venv\Scripts\Activate.ps1
-   pip install pandas numpy matplotlib lifelines jupyter ipykernel
+   pip install -r backend/requirements.txt
+   pip install matplotlib jupyter ipykernel
    ```
 4. Run `notebooks/01_load_and_clean.ipynb` top to bottom.
+5. Build the count table the API reads:
+   ```
+   python backend/build_counts.py
+   ```
+6. Start the API (from `backend/`):
+   ```
+   uvicorn main:app --reload
+   ```
+   It runs at http://127.0.0.1:8000, with interactive docs at `/docs`.
+7. Start the frontend (from `frontend/`):
+   ```
+   npm install
+   npm run dev
+   ```
+   Open http://localhost:5173.
+
+## Deployment
+
+The API goes on [Render](https://render.com) and the frontend on [Vercel](https://vercel.com).
+
+**API (Render)**
+1. In Render, choose **New > Blueprint** and select this repository. It reads `render.yaml`.
+2. In the service's **Environment** settings, add a **Secret File** named `km_counts.csv.gz` with the file from `backend/data/`. It is mounted at `/etc/secrets/km_counts.csv.gz`, which is where `DATA_PATH` points.
+3. After the frontend is deployed, set `ALLOWED_ORIGINS` to its URL (for example `https://oncosurvive.vercel.app`).
+
+Alternatively, set `DATA_URL` to a private download link and the API fetches the file at startup.
+
+**Frontend (Vercel)**
+1. Import the repository and set the **Root Directory** to `frontend`. Vercel detects Vite.
+2. Add the environment variable `VITE_API_URL` with your Render URL (for example `https://oncosurvive-api.onrender.com`).
+3. Deploy, then add the Vercel URL to `ALLOWED_ORIGINS` on Render.
+
+Render's free tier sleeps after inactivity, so the first request after a while can take up to a minute.
+
+Before making the site public, confirm that the SEER Data Use Agreement allows hosting an app that serves summary statistics. Only the aggregate count table is deployed, never patient-level records.
 
 ---
 
