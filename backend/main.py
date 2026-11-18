@@ -20,8 +20,12 @@ DATA_URL = os.environ.get("DATA_URL")
 
 if not DATA_PATH.exists():
     if not DATA_URL:
+        folder = DATA_PATH.parent
+        found = sorted(p.name for p in folder.iterdir()) if folder.is_dir() else []
         raise RuntimeError(
-            f"{DATA_PATH} not found. Run `python backend/build_counts.py`, or set DATA_URL."
+            f"{DATA_PATH} not found. Files in {folder}: {found or 'none'}. "
+            "Run `python backend/build_counts.py` locally, then add the file "
+            "(on Render: a Secret File with exactly this name), or set DATA_URL."
         )
     DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(DATA_URL, DATA_PATH)
